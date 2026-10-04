@@ -13,7 +13,6 @@ use Potato\SmartJudge\Domain\Context;
 use Potato\SmartJudge\Domain\Driver;
 use Potato\SmartJudge\Domain\Fingerprint;
 use Potato\SmartJudge\Domain\Flag;
-use Potato\SmartJudge\Domain\InvalidQuestion;
 use Potato\SmartJudge\Domain\Option;
 use Potato\SmartJudge\Domain\Question;
 use Potato\SmartJudge\Domain\Rule;
@@ -148,18 +147,6 @@ final class JudgeRulesTest extends TestCase
             $batches,
         );
         self::assertSame(['a', 'b', 'c'], array_keys($verdicts));
-    }
-
-    public function testRejectsAnOptionWithoutPlaceholderBeforeAnyRequest(): void
-    {
-        $this->driver->expects(self::never())->method('answer');
-        $this->expectException(InvalidQuestion::class);
-
-        $this->judge->decide(
-            [new Subject(1, [])],
-            'payee',
-            new Choice([new Option('essential', new Question('Is it essential?', 'Essential.', 'Not essential.'))], 0.6),
-        );
     }
 
     public function testFingerprintsWhatIsAskedTogetherWithItsDriver(): void

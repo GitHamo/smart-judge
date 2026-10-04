@@ -105,6 +105,7 @@ final readonly class Judge
         $ids = [];
         $questionIds = [];
         $filled = [];
+        $asked = [];
 
         // every question is built before the first request, so a mistake never costs a request
         foreach ($subjects as $subject) {
@@ -118,8 +119,15 @@ final readonly class Judge
             $filled[$subject->key] = [];
 
             foreach ($questions as $questionName => $question) {
-                // one question keeps the subject's id, so a flag asks just as its question alone
+                // a rule with one question, such as a flag, keeps the subject's id, so it asks just as its question alone
                 $questionId = 1 === \count($questions) ? $id : $id . self::QUESTION_SEPARATOR . $questionName;
+
+                // e.g. subject `3` with option `x__essential` and subject `3__x` with option `essential`
+                if (isset($asked[$questionId])) {
+                    throw new InvalidQuestion(\sprintf('Question id "%s" is given more than once; choose other subject keys or question names.', $questionId));
+                }
+
+                $asked[$questionId] = true;
                 $questionIds[$subject->key][$questionName] = $questionId;
                 $filled[$subject->key][$questionId] = $question->about($id);
             }
@@ -140,7 +148,10 @@ final readonly class Judge
         }
 
         return array_map(
-            static fn (array $ids): array => array_map(static fn (string $questionId): float => $answers[$questionId], $ids),
+            static fn (array $questionIdsByName): array => array_map(
+                static fn (string $questionId): float => $answers[$questionId],
+                $questionIdsByName,
+            ),
             $questionIds,
         );
     }

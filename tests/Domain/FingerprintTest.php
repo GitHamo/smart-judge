@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Potato\SmartJudge\Tests\Domain;
 
+use Override;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Potato\SmartJudge\Domain\Choice;
@@ -12,6 +13,7 @@ use Potato\SmartJudge\Domain\Flag;
 use Potato\SmartJudge\Domain\Option;
 use Potato\SmartJudge\Domain\Question;
 use Potato\SmartJudge\Domain\Rule;
+use Potato\SmartJudge\Domain\Verdict;
 
 final class FingerprintTest extends TestCase
 {
@@ -29,6 +31,30 @@ final class FingerprintTest extends TestCase
             Fingerprint::of([self::question()], 'typesafe:jev-1.13.0'),
             Fingerprint::of([new Question('Is `%s` a subscription?', 'A subscription.', 'No subscription.')], 'typesafe:jev-1.13.0'),
         );
+    }
+
+    public function testTellsAConsumersOwnRulesApartByTheirSettings(): void
+    {
+        $rule = static fn (float $threshold): Rule => new readonly class($threshold) implements Rule {
+            public function __construct(private float $threshold)
+            {
+            }
+
+            #[Override]
+            public function questions(): array
+            {
+                return ['monthly' => new Question('Is `%s` paid monthly?', 'Monthly.', 'Not monthly.')];
+            }
+
+            #[Override]
+            public function decide(array $probabilities, string $source): Verdict
+            {
+                return new Verdict($probabilities['monthly'] >= $this->threshold, $probabilities['monthly'], $source);
+            }
+        };
+
+        self::assertEquals(Fingerprint::of([$rule(0.6)], 'typesafe:jev-1.13.0'), Fingerprint::of([$rule(0.6)], 'typesafe:jev-1.13.0'));
+        self::assertNotEquals(Fingerprint::of([$rule(0.6)], 'typesafe:jev-1.13.0'), Fingerprint::of([$rule(0.7)], 'typesafe:jev-1.13.0'));
     }
 
     /**

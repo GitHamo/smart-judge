@@ -20,7 +20,24 @@ final readonly class Fingerprint
      */
     public static function of(array $asked, string $driver): self
     {
-        // serialized, so every rule, even a consumer's own, counts with its class and all its settings
-        return new self(hash('sha256', serialize([$driver, $asked])));
+        return new self(hash('sha256', json_encode(
+            [$driver, self::described($asked)],
+            JSON_THROW_ON_ERROR | JSON_PRESERVE_ZERO_FRACTION,
+        )));
+    }
+
+    /**
+     * Every object with its class and all its properties, so every rule, even a consumer's own, counts with all its settings.
+     *
+     * Not serialize(): it refuses anonymous classes and closures, both fair ways to write a rule.
+     */
+    private static function described(mixed $value): mixed
+    {
+        if (\is_object($value)) {
+            // the array cast holds private and protected properties too
+            return [$value::class, self::described((array) $value)];
+        }
+
+        return \is_array($value) ? array_map(self::described(...), $value) : $value;
     }
 }

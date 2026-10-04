@@ -226,4 +226,40 @@ final class JudgeTest extends TestCase
             'batch size of zero' => [$subjects, $question, 0],
         ];
     }
+
+    /**
+     * @param list<Subject> $subjects
+     */
+    #[DataProvider('invalidRulesDataProvider')]
+    public function testRejectsMistakesInARuleBeforeAnyRequest(array $subjects, Choice $choice): void
+    {
+        try {
+            $this->judge->decide($subjects, 'payee', $choice);
+            self::fail('Expected InvalidQuestion was not thrown.');
+        } catch (InvalidQuestion $exception) {
+            self::assertInstanceOf(LogicException::class, $exception);
+        }
+
+        self::assertCount(0, $this->history);
+    }
+
+    /**
+     * @return array<string, array{list<Subject>, Choice}>
+     */
+    public static function invalidRulesDataProvider(): array
+    {
+        $essential = new Option('essential', new Question('Is `%s` essential?', 'Essential.', 'Not essential.'));
+
+        return [
+            'an option without placeholder' => [
+                [new Subject(1, [])],
+                new Choice([$essential, new Option('discretionary', new Question('Is it discretionary?', 'Discretionary.', 'Not discretionary.'))], 0.6),
+            ],
+            // both would ask `payee_3__x__essential`, and one would answer for the other
+            'a question id twice' => [
+                [new Subject(3, []), new Subject('3__x', [])],
+                new Choice([$essential, new Option('x__essential', $essential->question)], 0.6),
+            ],
+        ];
+    }
 }
