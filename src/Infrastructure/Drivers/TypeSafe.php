@@ -7,6 +7,7 @@ namespace Potato\SmartJudge\Infrastructure\Drivers;
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use GuzzleHttp\Exception\ConnectException;
+use GuzzleHttp\Exception\RequestException;
 use GuzzleHttp\Exception\TransferException;
 use Override;
 use Potato\SmartJudge\Domain\Context;
@@ -102,7 +103,7 @@ final readonly class TypeSafe implements Driver
                 usleep(self::RETRY_DELAY_MILLISECONDS * 1000);
             }
 
-            $retriesLeft = $attempt < self::RETRIES;
+            $mayRetry = $attempt < self::RETRIES;
 
             try {
                 $response = $this->client->request('POST', rtrim($this->baseUrl, '/') . self::ENDPOINT, [
@@ -114,21 +115,24 @@ final readonly class TypeSafe implements Driver
                     'timeout' => $this->timeout,
                     'http_errors' => false,
                 ]);
-            } catch (ConnectException $exception) {
-                if ($retriesLeft) {
+            } catch (TransferException $exception) {
+                // only transport errors, e.g. also cURL error 60 when the certificate of the server cannot be verified;
+                // other errors are no outage and pass through
+                if ($mayRetry && $exception instanceof ConnectException) {
                     continue;
                 }
 
-                throw new JudgeUnavailable($this->name(), null, 'Could not be reached: ' . $exception->getMessage(), $exception);
-            } catch (TransferException $exception) {
-                // not only connection errors, e.g. cURL error 60 when the certificate of the server cannot be verified;
-                // other errors are no outage and pass through
-                throw new JudgeUnavailable($this->name(), null, 'Could not be reached: ' . $exception->getMessage(), $exception);
+                throw new JudgeUnavailable(
+                    $this->name(),
+                    $exception instanceof RequestException ? $exception->getResponse()?->getStatusCode() : null,
+                    'Could not be reached: ' . $exception->getMessage(),
+                    $exception,
+                );
             }
 
             $status = $response->getStatusCode();
 
-            if ($retriesLeft && \in_array($status, self::RETRY_STATUSES, true)) {
+            if ($mayRetry && \in_array($status, self::RETRY_STATUSES, true)) {
                 continue;
             }
 

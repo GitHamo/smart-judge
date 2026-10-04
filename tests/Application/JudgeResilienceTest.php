@@ -98,7 +98,7 @@ final class JudgeResilienceTest extends TestCase
     /**
      * @param list<Response|Throwable> $responses
      */
-    #[DataProvider('failuresDataProvider')]
+    #[DataProvider('unavailableDataProvider')]
     public function testIsUnavailableWhenTypeSafeGivesNoUsableAnswer(
         array $responses,
         int $expectedRequests,
@@ -123,7 +123,7 @@ final class JudgeResilienceTest extends TestCase
     /**
      * @return array<string, array{list<Response|Throwable>, int, int|null, string}>
      */
-    public static function failuresDataProvider(): array
+    public static function unavailableDataProvider(): array
     {
         $json = static fn (mixed $body): Response => new Response(200, [], json_encode($body, JSON_THROW_ON_ERROR));
         $noAnswer = 'Response has no answer for question "transaction_1".';
@@ -146,11 +146,17 @@ final class JudgeResilienceTest extends TestCase
                 'Could not be reached: timed out',
             ],
             // e.g. cURL error 60: the certificate of the server cannot be verified
-            'transport failed before a response' => [
+            'transport broke before a response' => [
                 [new RequestException('cURL error 60: SSL certificate problem', new Request('POST', self::URL))],
                 1,
                 null,
                 'Could not be reached: cURL error 60: SSL certificate problem',
+            ],
+            'too many redirects' => [
+                [new RequestException('Will not follow more than 5 redirects', new Request('POST', self::URL), new Response(302))],
+                1,
+                302,
+                'Could not be reached: Will not follow more than 5 redirects',
             ],
             'body is no JSON' => [[new Response(200, [], 'oops')], 1, 200, $noAnswer],
             'no answers' => [[$json(['model' => 'jev-1.13.0'])], 1, 200, $noAnswer],
