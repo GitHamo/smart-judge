@@ -14,10 +14,13 @@ use Override;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Potato\SmartJudge\Application\Judge;
+use Potato\SmartJudge\Domain\Choice;
 use Potato\SmartJudge\Domain\Context;
 use Potato\SmartJudge\Domain\InvalidQuestion;
+use Potato\SmartJudge\Domain\Option;
 use Potato\SmartJudge\Domain\Question;
 use Potato\SmartJudge\Domain\Subject;
+use Potato\SmartJudge\Domain\Verdict;
 use Potato\SmartJudge\Infrastructure\Drivers\TypeSafe;
 use Psr\Http\Message\RequestInterface;
 
@@ -159,6 +162,35 @@ final class JudgeTest extends TestCase
         $body = json_decode((string) $this->history[0]['request']->getBody(), true, flags: JSON_THROW_ON_ERROR);
 
         self::assertSame('Is `transaction_1` more than 50% of the income?', $body['questions']['transaction_1']['instructions']);
+    }
+
+    public function testDecidesAChoiceFromOneTypeSafeQuestionPerOption(): void
+    {
+        $this->responses->append(new Response(200, [], json_encode([
+            'answers' => ['payee_3__essential' => ['noul' => 0.9], 'payee_3__discretionary' => ['noul' => 0.2]],
+        ], JSON_THROW_ON_ERROR)));
+
+        $verdicts = $this->judge->decide(
+            [new Subject(3, ['name' => 'rewe'])],
+            'payee',
+            new Choice(
+                [
+                    new Option('essential', new Question('Is `%s` essential?', 'Essential.', 'Not essential.')),
+                    new Option('discretionary', new Question('Is `%s` discretionary?', 'Discretionary.', 'Not discretionary.')),
+                ],
+                0.6,
+            ),
+        );
+
+        self::assertEquals([3 => new Verdict('essential', 0.9, 'typesafe:jev-1.13.0')], $verdicts);
+
+        /** @var array{questions: array<string, array{instructions: string}>} $body */
+        $body = json_decode((string) $this->history[0]['request']->getBody(), true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame(
+            ['payee_3__essential' => 'Is `payee_3` essential?', 'payee_3__discretionary' => 'Is `payee_3` discretionary?'],
+            array_map(static fn (array $question): string => $question['instructions'], $body['questions']),
+        );
     }
 
     /**
