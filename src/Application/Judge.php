@@ -26,22 +26,19 @@ final readonly class Judge
      */
     public function ask(array $subjects, string $name, Question $question): array
     {
+        $ids = [];
         $facts = [];
         $questions = [];
 
         foreach ($subjects as $subject) {
             $id = $name . '_' . $subject->key;
+            $ids[$subject->key] = $id;
             $facts[$id] = $subject->facts;
             $questions[$id] = $question->about($id);
         }
 
-        $answers = $this->driver->answer($facts, $questions);
-        $probabilities = [];
+        $probabilities = $this->driver->answer($facts, $questions);
 
-        foreach ($subjects as $subject) {
-            $probabilities[$subject->key] = $answers[$name . '_' . $subject->key];
-        }
-
-        return $probabilities;
+        return array_map(static fn (string $id): float => $probabilities[$id], $ids);
     }
 }

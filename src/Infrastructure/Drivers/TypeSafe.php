@@ -17,7 +17,7 @@ use Potato\SmartJudge\Domain\Question;
  */
 final readonly class TypeSafe implements Driver
 {
-    public const string BASE_URL = 'https://api.typesafe.ai/v1';
+    private const string BASE_URL = 'https://api.typesafe.ai/v1';
     private const string ENDPOINT = '/systemone';
     private const string QUESTION_TYPE = 'noul';
 

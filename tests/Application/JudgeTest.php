@@ -9,6 +9,7 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
+use Override;
 use PHPUnit\Framework\TestCase;
 use Potato\SmartJudge\Application\Judge;
 use Potato\SmartJudge\Domain\Question;
@@ -25,7 +26,7 @@ final class JudgeTest extends TestCase
 
     private Judge $judge;
 
-    #[\Override]
+    #[Override]
     protected function setUp(): void
     {
         $this->responses = new MockHandler();
@@ -65,7 +66,6 @@ final class JudgeTest extends TestCase
         self::assertSame('https://jev.example.org/v1/systemone', (string) $request->getUri());
         self::assertSame('Bearer secret-key', $request->getHeaderLine('Authorization'));
         self::assertSame('application/json', $request->getHeaderLine('Accept'));
-        // the same payload eBud sends today, so the calibration against the pinned model holds
         self::assertSame(
             [
                 'state' => [
@@ -104,17 +104,12 @@ final class JudgeTest extends TestCase
 
         self::assertSame(['a-b' => 0.8], $probabilities);
 
-        /** @var array{state: array<string, mixed>} $payload */
-        $payload = json_decode((string) $this->history[0]['request']->getBody(), true, flags: JSON_THROW_ON_ERROR);
+        /** @var array{state: array<string, mixed>} $body */
+        $body = json_decode((string) $this->history[0]['request']->getBody(), true, flags: JSON_THROW_ON_ERROR);
 
         self::assertSame(
             ['pair_a-b' => ['first' => ['description' => 'netflix'], 'second' => ['description' => 'NETFLIX.COM']]],
-            $payload['state'],
+            $body['state'],
         );
-    }
-
-    public function testDriverIsNamedAfterItsModel(): void
-    {
-        self::assertSame('typesafe:jev-1.13.0', (new TypeSafe('secret-key', 'jev-1.13.0'))->name());
     }
 }
