@@ -7,6 +7,7 @@ namespace Potato\SmartJudge\Application;
 use Potato\SmartJudge\Domain\Context;
 use Potato\SmartJudge\Domain\Driver;
 use Potato\SmartJudge\Domain\InvalidQuestion;
+use Potato\SmartJudge\Domain\JudgeUnavailable;
 use Potato\SmartJudge\Domain\Question;
 use Potato\SmartJudge\Domain\Subject;
 
@@ -31,6 +32,7 @@ final readonly class Judge
      * @return array<int|string, float> probability of "yes" per subject key
      *
      * @throws InvalidQuestion when the question has not one placeholder, two subjects share a key or the batch size is not positive
+     * @throws JudgeUnavailable when the driver gives no usable answer, so the consumer falls back
      */
     public function ask(
         array $subjects,

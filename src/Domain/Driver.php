@@ -22,6 +22,8 @@ interface Driver
      * @param Context|null $context facts shared by every subject, sent once under {@see Context::KEY}
      *
      * @return array<string, float> probability of "yes" per question id, between 0 and 1
+     *
+     * @throws JudgeUnavailable when the driver gives no usable answer
      */
     public function answer(array $facts, array $questions, ?Context $context): array;
 }
