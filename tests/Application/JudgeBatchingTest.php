@@ -10,6 +10,7 @@ use PHPUnit\Framework\TestCase;
 use Potato\SmartJudge\Application\Judge;
 use Potato\SmartJudge\Domain\Context;
 use Potato\SmartJudge\Domain\Driver;
+use Potato\SmartJudge\Domain\JudgeUnavailable;
 use Potato\SmartJudge\Domain\Question;
 use Potato\SmartJudge\Domain\Subject;
 
@@ -87,6 +88,21 @@ final class JudgeBatchingTest extends TestCase
             [7 => 0.7, 3 => 0.3],
             $this->judge->ask([new Subject(7, ['n' => 7]), new Subject(3, ['n' => 3])], 'subject', $this->question),
         );
+    }
+
+    public function testADriverThatLeavesOutAQuestionIsUnavailable(): void
+    {
+        $this->driver->method('name')->willReturn('custom:v1');
+        $this->driver->method('answer')->willReturn(['subject_a' => 0.5]);
+
+        try {
+            $this->judge->ask($this->subjects(['a', 'b']), 'subject', $this->question);
+            self::fail('Expected JudgeUnavailable was not thrown.');
+        } catch (JudgeUnavailable $exception) {
+            self::assertSame('custom:v1', $exception->driver);
+            self::assertNull($exception->status);
+            self::assertSame('Gave no answer for question "subject_b".', $exception->reason);
+        }
     }
 
     public function testAsksNothingWithoutSubjects(): void

@@ -144,7 +144,16 @@ final readonly class Judge
                 $batchQuestions = [...$batchQuestions, ...$filled[$subject->key]];
             }
 
-            $answers = [...$answers, ...$this->driver->answer($facts, $batchQuestions, $context)];
+            $batchAnswers = $this->driver->answer($facts, $batchQuestions, $context);
+
+            // any driver, even one that breaks the port's promise, leaves the consumer an answer it can fall back on
+            foreach (array_keys($batchQuestions) as $questionId) {
+                if (!isset($batchAnswers[$questionId])) {
+                    throw new JudgeUnavailable($this->driver->name(), null, \sprintf('Gave no answer for question "%s".', $questionId));
+                }
+            }
+
+            $answers = [...$answers, ...$batchAnswers];
         }
 
         return array_map(
