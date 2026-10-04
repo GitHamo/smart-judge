@@ -1,0 +1,120 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Potato\SmartJudge\Tests\Application;
+
+use GuzzleHttp\Client;
+use GuzzleHttp\Handler\MockHandler;
+use GuzzleHttp\HandlerStack;
+use GuzzleHttp\Middleware;
+use GuzzleHttp\Psr7\Response;
+use PHPUnit\Framework\TestCase;
+use Potato\SmartJudge\Application\Judge;
+use Potato\SmartJudge\Domain\Question;
+use Potato\SmartJudge\Domain\Subject;
+use Potato\SmartJudge\Infrastructure\Drivers\TypeSafe;
+use Psr\Http\Message\RequestInterface;
+
+final class JudgeTest extends TestCase
+{
+    private MockHandler $responses;
+
+    /** @var list<array{request: RequestInterface}> */
+    private array $history = [];
+
+    private Judge $judge;
+
+    #[\Override]
+    protected function setUp(): void
+    {
+        $this->responses = new MockHandler();
+        $stack = HandlerStack::create($this->responses);
+        $stack->push(Middleware::history($this->history));
+
+        $this->judge = new Judge(
+            new TypeSafe('secret-key', 'jev-1.13.0', 'https://jev.example.org/v1', new Client(['handler' => $stack])),
+        );
+    }
+
+    public function testAsksTypeSafeOneQuestionPerSubjectAndReturnsProbabilitiesByKey(): void
+    {
+        $this->responses->append(new Response(200, [], json_encode([
+            'model' => 'jev-1.13.0',
+            'answers' => [
+                'transaction_3' => ['type' => 'noul', 'noul' => 0.95],
+                'transaction_7' => ['type' => 'noul', 'noul' => 0.1],
+            ],
+        ], JSON_THROW_ON_ERROR)));
+
+        $probabilities = $this->judge->ask(
+            [
+                new Subject(3, ['description' => 'netflix', 'frequency' => 'monthly']),
+                new Subject(7, ['description' => 'bakery', 'frequency' => 'weekly']),
+            ],
+            'transaction',
+            new Question('Is `%s` a recurring transaction?', 'A commitment that repeats.', 'One-off spending.'),
+        );
+
+        self::assertSame([3 => 0.95, 7 => 0.1], $probabilities);
+        self::assertCount(1, $this->history);
+
+        $request = $this->history[0]['request'];
+
+        self::assertSame('POST', $request->getMethod());
+        self::assertSame('https://jev.example.org/v1/systemone', (string) $request->getUri());
+        self::assertSame('Bearer secret-key', $request->getHeaderLine('Authorization'));
+        self::assertSame('application/json', $request->getHeaderLine('Accept'));
+        // the same payload eBud sends today, so the calibration against the pinned model holds
+        self::assertSame(
+            [
+                'state' => [
+                    'transaction_3' => ['description' => 'netflix', 'frequency' => 'monthly'],
+                    'transaction_7' => ['description' => 'bakery', 'frequency' => 'weekly'],
+                ],
+                'model' => 'jev-1.13.0',
+                'questions' => [
+                    'transaction_3' => [
+                        'type' => 'noul',
+                        'instructions' => 'Is `transaction_3` a recurring transaction?',
+                        'criteria' => ['true' => 'A commitment that repeats.', 'false' => 'One-off spending.'],
+                    ],
+                    'transaction_7' => [
+                        'type' => 'noul',
+                        'instructions' => 'Is `transaction_7` a recurring transaction?',
+                        'criteria' => ['true' => 'A commitment that repeats.', 'false' => 'One-off spending.'],
+                    ],
+                ],
+            ],
+            json_decode((string) $request->getBody(), true, flags: JSON_THROW_ON_ERROR),
+        );
+    }
+
+    public function testKeepsNestedFactsOfAPairAsOneSubject(): void
+    {
+        $this->responses->append(new Response(200, [], json_encode([
+            'answers' => ['pair_a-b' => ['noul' => 0.8]],
+        ], JSON_THROW_ON_ERROR)));
+
+        $probabilities = $this->judge->ask(
+            [new Subject('a-b', ['first' => ['description' => 'netflix'], 'second' => ['description' => 'NETFLIX.COM']])],
+            'pair',
+            new Question('Do `first` and `second` of `%s` describe the same payee?', 'Same payee.', 'Different payees.'),
+        );
+
+        self::assertSame(['a-b' => 0.8], $probabilities);
+
+        /** @var array{state: array<string, mixed>} $payload */
+        $payload = json_decode((string) $this->history[0]['request']->getBody(), true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame(
+            ['pair_a-b' => ['first' => ['description' => 'netflix'], 'second' => ['description' => 'NETFLIX.COM']]],
+            $payload['state'],
+        );
+    }
+
+    public function testDriverIsNamedAfterItsModel(): void
+    {
+        self::assertSame('typesafe:jev-1.13.0', (new TypeSafe('secret-key', 'jev-1.13.0'))->name());
+    }
+}
