@@ -15,22 +15,22 @@ use Potato\SmartJudge\Domain\Subject;
  */
 final readonly class Judge
 {
+    // models get less accurate as a request grows, so subjects are asked in small batches
+    public const int BATCH_SIZE = 20;
+
     public function __construct(
         private Driver $driver,
     ) {
     }
 
-    // models get less accurate as a request grows, so subjects are asked in small batches
-    public const int BATCH_SIZE = 20;
-
     /**
      * @param list<Subject> $subjects
      * @param string $name the consumer's name for its kind of subject, e.g. `pair`; ids read `<name>_<key>`
-     * @param positive-int $batchSize the most subjects asked about in one request to the driver
+     * @param int $batchSize the most subjects asked about in one request to the driver, at least 1
      *
      * @return array<int|string, float> probability of "yes" per subject key
      *
-     * @throws InvalidQuestion when the question has no placeholder or two subjects share a key
+     * @throws InvalidQuestion when the question has not one placeholder, two subjects share a key or the batch size is not positive
      */
     public function ask(
         array $subjects,
@@ -39,6 +39,10 @@ final readonly class Judge
         ?Context $context = null,
         int $batchSize = self::BATCH_SIZE,
     ): array {
+        if ($batchSize < 1) {
+            throw new InvalidQuestion(\sprintf('Batch size must be at least 1, %d given.', $batchSize));
+        }
+
         $ids = [];
         $questions = [];
 

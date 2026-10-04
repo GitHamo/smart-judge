@@ -10,7 +10,6 @@ use PHPUnit\Framework\TestCase;
 use Potato\SmartJudge\Application\Judge;
 use Potato\SmartJudge\Domain\Context;
 use Potato\SmartJudge\Domain\Driver;
-use Potato\SmartJudge\Domain\InvalidQuestion;
 use Potato\SmartJudge\Domain\Question;
 use Potato\SmartJudge\Domain\Subject;
 
@@ -45,9 +44,9 @@ final class JudgeBatchingTest extends TestCase
                 return array_map(static fn (Question $question): float => 0.5, $questions);
             });
 
-        $probabilities = $this->judge->ask($this->subjects(['a', 'b', 'c', 'd', 'e']), 'item', $this->question, $context, 2);
+        $probabilities = $this->judge->ask($this->subjects(['a', 'b', 'c', 'd', 'e']), 'subject', $this->question, $context, 2);
 
-        self::assertSame([['item_a', 'item_b'], ['item_c', 'item_d'], ['item_e']], $batches);
+        self::assertSame([['subject_a', 'subject_b'], ['subject_c', 'subject_d'], ['subject_e']], $batches);
         self::assertSame(['a' => 0.5, 'b' => 0.5, 'c' => 0.5, 'd' => 0.5, 'e' => 0.5], $probabilities);
     }
 
@@ -64,7 +63,7 @@ final class JudgeBatchingTest extends TestCase
                 return array_map(static fn (Question $question): float => 0.5, $questions);
             });
 
-        $this->judge->ask($this->subjects(range(1, 25)), 'item', $this->question);
+        $this->judge->ask($this->subjects(range(1, 25)), 'subject', $this->question);
 
         self::assertSame([20, 5], $sizes);
     }
@@ -75,18 +74,18 @@ final class JudgeBatchingTest extends TestCase
             ->expects(self::once())
             ->method('answer')
             ->with(
-                ['item_7' => ['n' => 7], 'item_3' => ['n' => 3]],
+                ['subject_7' => ['n' => 7], 'subject_3' => ['n' => 3]],
                 [
-                    'item_7' => new Question('Is `item_7` recurring?', 'Recurring.', 'One-off.'),
-                    'item_3' => new Question('Is `item_3` recurring?', 'Recurring.', 'One-off.'),
+                    'subject_7' => new Question('Is `subject_7` recurring?', 'Recurring.', 'One-off.'),
+                    'subject_3' => new Question('Is `subject_3` recurring?', 'Recurring.', 'One-off.'),
                 ],
                 null,
             )
-            ->willReturn(['item_3' => 0.3, 'item_7' => 0.7]);
+            ->willReturn(['subject_3' => 0.3, 'subject_7' => 0.7]);
 
         self::assertSame(
             [7 => 0.7, 3 => 0.3],
-            $this->judge->ask([new Subject(7, ['n' => 7]), new Subject(3, ['n' => 3])], 'item', $this->question),
+            $this->judge->ask([new Subject(7, ['n' => 7]), new Subject(3, ['n' => 3])], 'subject', $this->question),
         );
     }
 
@@ -94,31 +93,7 @@ final class JudgeBatchingTest extends TestCase
     {
         $this->driver->expects(self::never())->method('answer');
 
-        self::assertSame([], $this->judge->ask([], 'item', $this->question));
-    }
-
-    public function testRejectsQuestionTextWithoutPlaceholder(): void
-    {
-        $this->driver->expects(self::never())->method('answer');
-
-        $this->expectException(InvalidQuestion::class);
-
-        $this->judge->ask($this->subjects([1]), 'item', new Question('Is it recurring?', 'Recurring.', 'One-off.'));
-    }
-
-    public function testRejectsDuplicateSubjectKeys(): void
-    {
-        $this->driver->expects(self::never())->method('answer');
-
-        $this->expectException(InvalidQuestion::class);
-
-        // 1 and '1' are the same key in PHP, and would answer for each other
-        $this->judge->ask([new Subject(1, []), new Subject('1', [])], 'item', $this->question);
-    }
-
-    public function testInvalidQuestionIsALogicError(): void
-    {
-        self::assertInstanceOf(\LogicException::class, new InvalidQuestion('bug'));
+        self::assertSame([], $this->judge->ask([], 'subject', $this->question));
     }
 
     /**

@@ -9,10 +9,13 @@ use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
+use LogicException;
 use Override;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Potato\SmartJudge\Application\Judge;
 use Potato\SmartJudge\Domain\Context;
+use Potato\SmartJudge\Domain\InvalidQuestion;
 use Potato\SmartJudge\Domain\Question;
 use Potato\SmartJudge\Domain\Subject;
 use Potato\SmartJudge\Infrastructure\Drivers\TypeSafe;
@@ -138,5 +141,57 @@ final class JudgeTest extends TestCase
             ],
             $body['state'],
         );
+    }
+
+    public function testFillsOnlyThePlaceholderAndKeepsOtherPercentSigns(): void
+    {
+        $this->responses->append(new Response(200, [], json_encode([
+            'answers' => ['transaction_1' => ['noul' => 0.6]],
+        ], JSON_THROW_ON_ERROR)));
+
+        $this->judge->ask(
+            [new Subject(1, ['description' => 'rent'])],
+            'transaction',
+            new Question('Is `%s` more than 50% of the income?', 'More.', 'Less.'),
+        );
+
+        /** @var array{questions: array<string, array{instructions: string}>} $body */
+        $body = json_decode((string) $this->history[0]['request']->getBody(), true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame('Is `transaction_1` more than 50% of the income?', $body['questions']['transaction_1']['instructions']);
+    }
+
+    /**
+     * @param list<Subject> $subjects
+     */
+    #[DataProvider('invalidQuestionsDataProvider')]
+    public function testRejectsMistakesInWhatIsAskedBeforeAnyRequest(array $subjects, Question $question, int $batchSize): void
+    {
+        try {
+            $this->judge->ask($subjects, 'transaction', $question, batchSize: $batchSize);
+            self::fail('Expected InvalidQuestion was not thrown.');
+        } catch (InvalidQuestion $exception) {
+            self::assertInstanceOf(LogicException::class, $exception);
+        }
+
+        self::assertCount(0, $this->history);
+    }
+
+    /**
+     * @return array<string, array{list<Subject>, Question, int}>
+     */
+    public static function invalidQuestionsDataProvider(): array
+    {
+        $question = new Question('Is `%s` recurring?', 'Recurring.', 'One-off.');
+        $subjects = [new Subject(1, []), new Subject(2, [])];
+
+        return [
+            'no placeholder' => [$subjects, new Question('Is it recurring?', 'Recurring.', 'One-off.'), 20],
+            'two placeholders' => [$subjects, new Question('Is `%s` like `%s`?', 'Alike.', 'Different.'), 20],
+            // 1 and '1' are the same key in PHP, and would answer for each other
+            'duplicate keys' => [[new Subject(1, []), new Subject('1', [])], $question, 20],
+            'a later duplicate key' => [[...$subjects, new Subject(3, []), new Subject(2, [])], $question, 1],
+            'batch size of zero' => [$subjects, $question, 0],
+        ];
     }
 }
