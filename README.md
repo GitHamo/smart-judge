@@ -21,7 +21,7 @@ use Potato\SmartJudge\Application\Judge;
 use Potato\SmartJudge\Infrastructure\Drivers\TypeSafe;
 
 $judge = new Judge(new TypeSafe(
-    apiKey: getenv('TYPESAFE_API_KEY'),
+    apiKey: (string) getenv('TYPESAFE_API_KEY'),
     model: 'jev-1.13.0',
     baseUrl: 'https://api.typesafe.ai/v1', // the default
     client: null,                          // your own Guzzle client, e.g. with a proxy; a new one by default
