@@ -19,8 +19,9 @@ interface Driver
      *
      * @param array<string, array<string, mixed>> $facts the facts of each subject, keyed by the subject's id
      * @param array<string, Question> $questions questions with their placeholder filled, keyed by question id
+     * @param Context|null $context facts shared by every subject, sent once under {@see Context::KEY}
      *
      * @return array<string, float> probability of "yes" per question id, between 0 and 1
      */
-    public function answer(array $facts, array $questions): array;
+    public function answer(array $facts, array $questions, ?Context $context): array;
 }

@@ -12,6 +12,7 @@ use GuzzleHttp\Psr7\Response;
 use Override;
 use PHPUnit\Framework\TestCase;
 use Potato\SmartJudge\Application\Judge;
+use Potato\SmartJudge\Domain\Context;
 use Potato\SmartJudge\Domain\Question;
 use Potato\SmartJudge\Domain\Subject;
 use Potato\SmartJudge\Infrastructure\Drivers\TypeSafe;
@@ -109,6 +110,32 @@ final class JudgeTest extends TestCase
 
         self::assertSame(
             ['pair_a-b' => ['first' => ['description' => 'netflix'], 'second' => ['description' => 'NETFLIX.COM']]],
+            $body['state'],
+        );
+    }
+
+    public function testSendsTheContextOnceUnderItsFixedKey(): void
+    {
+        $this->responses->append(new Response(200, [], json_encode([
+            'answers' => ['transaction_1' => ['noul' => 0.2], 'transaction_2' => ['noul' => 0.3]],
+        ], JSON_THROW_ON_ERROR)));
+
+        $this->judge->ask(
+            [new Subject(1, ['description' => 'netflix']), new Subject(2, ['description' => 'spotify'])],
+            'transaction',
+            new Question('Given the `context`, is `%s` recurring?', 'Recurring.', 'One-off.'),
+            new Context(['currency' => 'euro']),
+        );
+
+        /** @var array{state: array<string, mixed>} $body */
+        $body = json_decode((string) $this->history[0]['request']->getBody(), true, flags: JSON_THROW_ON_ERROR);
+
+        self::assertSame(
+            [
+                'context' => ['currency' => 'euro'],
+                'transaction_1' => ['description' => 'netflix'],
+                'transaction_2' => ['description' => 'spotify'],
+            ],
             $body['state'],
         );
     }

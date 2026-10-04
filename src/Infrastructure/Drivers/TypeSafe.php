@@ -7,6 +7,7 @@ namespace Potato\SmartJudge\Infrastructure\Drivers;
 use GuzzleHttp\Client;
 use GuzzleHttp\ClientInterface;
 use Override;
+use Potato\SmartJudge\Domain\Context;
 use Potato\SmartJudge\Domain\Driver;
 use Potato\SmartJudge\Domain\Question;
 
@@ -39,8 +40,12 @@ final readonly class TypeSafe implements Driver
     }
 
     #[Override]
-    public function answer(array $facts, array $questions): array
+    public function answer(array $facts, array $questions, ?Context $context): array
     {
+        if (null !== $context) {
+            $facts = [Context::KEY => $context->facts, ...$facts];
+        }
+
         $response = $this->client->request('POST', rtrim($this->baseUrl, '/') . self::ENDPOINT, [
             'headers' => [
                 'Authorization' => 'Bearer ' . $this->apiKey,
